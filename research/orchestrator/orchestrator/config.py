@@ -29,7 +29,7 @@ class MCPServerConfig:
 @dataclass(slots=True)
 class RunConfig:
     max_turns: int = 20
-    stale_turn_limit: int = 3
+    stale_turn_limit: int = 4
     reflection_interval: int = 6
     log_dir: Path = Path("runs")
 

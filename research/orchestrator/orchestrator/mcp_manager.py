@@ -58,8 +58,8 @@ class MCPServerHandle:
         if self._exit_stack:
             try:
                 await self._exit_stack.aclose()
-            except RuntimeError:
-                # Ignore cancellation errors during shutdown
+            except (RuntimeError, asyncio.CancelledError):
+                # Ignore cancellation noise during shutdown
                 pass
         self._exit_stack = None
         self._session = None

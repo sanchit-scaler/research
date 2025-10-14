@@ -70,7 +70,8 @@ async def main() -> None:
                 usage=usage,
             )
 
-            if tool_calls:
+            activity = bool(tool_calls) or bool(message and message.strip())
+            if activity:
                 active.reset_stale()
             else:
                 active.increment_stale()
@@ -83,7 +84,10 @@ async def main() -> None:
 
         console.print("\n[bold green]Run complete.[/]")
     finally:
-        await mcp.close()
+        try:
+            await mcp.close()
+        except asyncio.CancelledError:
+            pass
         logger.close()
 
 
@@ -112,7 +116,15 @@ async def _drive_agent_turn(
 
     for _ in range(max_tool_rounds):
         response_text, usage = await llm.complete(agent.build_messages())
-        tool_calls = extract_tool_calls(response_text)
+        try:
+            tool_calls = extract_tool_calls(response_text)
+        except ValueError as exc:
+            natural_text = response_text.strip()
+            if natural_text:
+                console.print(f"[yellow]{agent.name} formatting issue:[/] {exc}")
+                agent.respond(natural_text)
+                teammate.receive(f"{agent.name}: {natural_text}")
+            return natural_text, accumulated_tool_calls, tool_outputs, usage
         natural_text = strip_tool_call_lines(response_text)
 
         if natural_text:
@@ -134,6 +146,11 @@ async def _drive_agent_turn(
                     {"name": call.name, "arguments": call.arguments, "output": rendered}
                 )
                 agent.receive(f"[tool:{call.name}] {rendered}")
+                summary = (rendered or "(no content)").strip()
+                summary = " ".join(summary.split())
+                teammate.receive(
+                    f"{agent.name} tool {call.name}: {summary[:400]}"  # keep context tight
+                )
             except Exception as exc:  # noqa: BLE001
                 error_message = f"[tool-error:{call.name}] {exc}"
                 console.print(f"[red]{error_message}[/]")
@@ -145,6 +162,7 @@ async def _drive_agent_turn(
                     }
                 )
                 agent.receive(error_message)
+                teammate.receive(f"{agent.name} tool {call.name} failed: {exc}")
 
     console.print(
         "[red]Max tool rounds reached without natural response; handing over turn.[/]"

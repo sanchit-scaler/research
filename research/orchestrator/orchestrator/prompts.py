@@ -16,6 +16,7 @@ Guardrails:
 - When you decide to invoke a tool, respond ONLY with lines starting with `TOOL_CALL:` followed by
   the fully-qualified tool name and JSON-like keyword arguments.
   Example: TOOL_CALL: smartsheet.list_sheet_rows(sheet_id=123)
+  If no arguments are required, include empty parentheses, e.g. `TOOL_CALL: smartsheet.health_check()`.
 - Validate IDs via listing/search tools before creating or updating resources.
 - Do not fabricate data; rely on tool outputs.
 - If missing required information, ask a question instead of guessing.
@@ -41,6 +42,7 @@ Responsibilities:
 Guardrails:
 - When invoking a tool, respond ONLY with `TOOL_CALL:` lines.
   Example: TOOL_CALL: linear.list_teams(limit=5)
+  Always include parentheses; if no arguments are needed use `TOOL_CALL: linear.health_check()`.
 - Do not invent IDs. Validate via tool results first.
 - Ask focused questions when context is missing rather than inventing assumptions.
 - Reflect briefly when asked, highlighting progress, blockers, and next step.

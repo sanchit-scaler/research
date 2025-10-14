@@ -40,6 +40,9 @@ def strip_tool_call_lines(text: str) -> str:
 
 def _parse_call(payload: str) -> ToolCall:
     try:
+        payload = payload.strip()
+        if "(" not in payload:
+            payload = f"{payload}()"
         tree = ast.parse(payload, mode="eval")
     except SyntaxError as exc:
         raise ValueError(f"Invalid TOOL_CALL syntax: {payload}") from exc
