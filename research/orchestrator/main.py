@@ -154,12 +154,13 @@ async def main(world_prompt: str = HELLO_TICKET_WORLD) -> None:
             should_reflect = (turn + 1) % cfg.run.reflection_interval == 0
             if should_reflect and turn > 0:  # Don't reflect on first turn
                 reflection_prompt = (
-                    "Please take a moment to reflect on progress so far. "
-                    "What has been accomplished? What are the next steps? "
-                    "Are there any blockers or concerns?"
+                    "Take a moment to reflect: What has been accomplished? What are the next steps? "
+                    "IMPORTANT: If there's something assigned to you or identified as a next deliverable, "
+                    "STOP DISCUSSING and CREATE IT NOW using the tools in this turn. The team values "
+                    "action over planning. Show progress through actual artifacts, not promises."
                 )
                 active.receive(reflection_prompt)
-                console.print(f"[yellow]↻ Reflection prompt injected[/]")
+                console.print(f"[yellow]↻ Action-focused reflection prompt injected[/]")
 
             message, tool_calls, tool_outputs, usage = await _drive_agent_turn(
                 active,
