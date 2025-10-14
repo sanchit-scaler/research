@@ -3,7 +3,19 @@
 Minimal two-agent orchestrator that exercises the Linear and Smartsheet MCP servers with a
 simple planning-and-delivery scenario.
 
-## Scenario: “Hello Ticket”
+## Architecture
+
+The orchestrator uses a **modular prompt architecture**:
+
+- **Agent Personas** (Aanya the Planner, Arjun the Engineer) - Define *who* the agents are
+- **World/Scenario Prompts** - Define *what* they're trying to accomplish
+- **Composed at Runtime** - Personas + Scenario = Complete system prompt
+
+This separation allows you to reuse the same agents across different scenarios (bug triage, sprint planning, feature specs, etc.) without rewriting agent identities.
+
+See [SCENARIOS.md](./SCENARIOS.md) for detailed documentation and examples.
+
+## Default Scenario: "Hello Ticket"
 
 - Planner agent creates or updates a Smartsheet row with three to four acceptance criteria.
 - Engineer agent discovers an appropriate Linear team/project, creates one issue, links it to the
@@ -49,8 +61,23 @@ LINEAR_MCP_CMD=uv --directory /Users/apple/Github/mimicry-club run python -m app
 
 ## Run
 
+### Default Scenario (Hello Ticket)
+
 ```bash
 uv run python main.py
+```
+
+### Run with Different Scenarios
+
+```bash
+# Run bug triage workflow
+python examples.py bug_triage
+
+# Run sprint planning workflow
+python examples.py sprint_planning
+
+# Run documentation sync workflow
+python examples.py documentation_sync
 ```
 
 The orchestrator will:
@@ -61,6 +88,8 @@ The orchestrator will:
    - `linear.list_teams(limit=1)`
 3. Alternate turns between Planner and Engineer until success or stop condition.
 4. Log every turn to `runs/hello_ticket_<timestamp>.jsonl` (messages, tool calls, results, tokens).
+
+See [SCENARIOS.md](./SCENARIOS.md) for creating custom scenarios.
 
 ## Next Steps
 

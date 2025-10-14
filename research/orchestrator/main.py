@@ -13,13 +13,20 @@ from orchestrator.llm import OpenAIClient
 from orchestrator.logger import RunLogger
 from orchestrator.mcp_manager import MCPManager, NamespacedTool
 from orchestrator.parsing import ToolCall
-from orchestrator.prompts import ENGINEER_SYSTEM_PROMPT, PLANNER_SYSTEM_PROMPT
+from orchestrator.prompts import (
+    ENGINEER_PERSONA,
+    ENGINEER_SYSTEM_PROMPT,
+    HELLO_TICKET_WORLD,
+    PLANNER_PERSONA,
+    PLANNER_SYSTEM_PROMPT,
+    build_agent_prompt,
+)
 
 
 console = Console()
 
 
-def _build_run_signature(cfg: Config) -> Dict[str, Any]:
+def _build_run_signature(cfg: Config, world_prompt: str, planner_prompt: str, engineer_prompt: str) -> Dict[str, Any]:
     """Build a run signature containing configuration and prompts for this run."""
     return {
         "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -37,18 +44,32 @@ def _build_run_signature(cfg: Config) -> Dict[str, Any]:
             "reflection_interval": cfg.run.reflection_interval,
             "log_dir": str(cfg.run.log_dir),
         },
-        "agent_prompts": {
-            "planner": PLANNER_SYSTEM_PROMPT,
-            "engineer": ENGINEER_SYSTEM_PROMPT,
+        "world_prompt": world_prompt,
+        "agent_personas": {
+            "planner": PLANNER_PERSONA,
+            "engineer": ENGINEER_PERSONA,
+        },
+        "composed_prompts": {
+            "planner": planner_prompt,
+            "engineer": engineer_prompt,
         },
     }
 
 
-async def main() -> None:
+async def main(world_prompt: str = HELLO_TICKET_WORLD) -> None:
+    """Run the orchestrator with a given world/scenario prompt.
+    
+    Args:
+        world_prompt: The scenario/world context to use. Defaults to HELLO_TICKET_WORLD.
+    """
     cfg = load_config()
     
+    # Compose agent prompts with the world context
+    planner_persona_prompt = build_agent_prompt(world_prompt, PLANNER_PERSONA)
+    engineer_persona_prompt = build_agent_prompt(world_prompt, ENGINEER_PERSONA)
+    
     # Build run signature with configuration details
-    run_signature = _build_run_signature(cfg)
+    run_signature = _build_run_signature(cfg, world_prompt, planner_persona_prompt, engineer_persona_prompt)
     
     logger = RunLogger(cfg.run.log_dir, run_signature=run_signature)
     mcp = MCPManager(cfg.mcp)
@@ -72,8 +93,8 @@ async def main() -> None:
             console.print(f"  {name}: {result}")
         logger.log_event("health_probe", {"results": health})
 
-        planner_prompt = _build_prompt(PLANNER_SYSTEM_PROMPT, tools)
-        engineer_prompt = _build_prompt(ENGINEER_SYSTEM_PROMPT, tools)
+        planner_prompt = _build_prompt(planner_persona_prompt, tools)
+        engineer_prompt = _build_prompt(engineer_persona_prompt, tools)
 
         planner = AgentState("planner", planner_prompt)
         engineer = AgentState("engineer", engineer_prompt)
