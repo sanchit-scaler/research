@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, BadRequestError
 
 from .config import OpenAIConfig
 
@@ -15,20 +15,30 @@ class OpenAIClient:
         self._model = cfg.model
         self._temperature = cfg.temperature
         self._seed = cfg.seed
+        self._temperature_supported = cfg.temperature is not None
 
     async def complete(
         self, messages: List[Dict[str, Any]], max_output_tokens: int = 600
     ) -> Tuple[str, Dict[str, Any]]:
         kwargs: Dict[str, Any] = {
             "model": self._model,
-            "temperature": self._temperature,
             "input": messages,
             "max_output_tokens": max_output_tokens,
         }
+        include_temp = self._should_include_temperature()
+        if include_temp:
+            kwargs["temperature"] = self._temperature
         if self._seed is not None:
             kwargs["seed"] = self._seed
 
-        response = await self._client.responses.create(**kwargs)
+        try:
+            response = await self._client.responses.create(**kwargs)
+        except BadRequestError as err:
+            if self._handle_temperature_error(err, include_temp):
+                kwargs.pop("temperature", None)
+                response = await self._client.responses.create(**kwargs)
+            else:
+                raise
 
         text = getattr(response, "output_text", None)
         if text is None:
@@ -52,17 +62,41 @@ class OpenAIClient:
         """
         kwargs: Dict[str, Any] = {
             "model": self._model,
-            "temperature": self._temperature,
             "input": inputs,
             "tools": tools,
             "max_output_tokens": max_output_tokens,
             "parallel_tool_calls": parallel_tool_calls,
             "tool_choice": tool_choice,
         }
+        include_temp = self._should_include_temperature()
+        if include_temp:
+            kwargs["temperature"] = self._temperature
         if self._seed is not None:
             kwargs["seed"] = self._seed
 
-        return await self._client.responses.create(**kwargs)
+        try:
+            return await self._client.responses.create(**kwargs)
+        except BadRequestError as err:
+            if self._handle_temperature_error(err, include_temp):
+                kwargs.pop("temperature", None)
+                return await self._client.responses.create(**kwargs)
+            raise
+
+    def _should_include_temperature(self) -> bool:
+        return self._temperature is not None and self._temperature_supported
+
+    def _handle_temperature_error(self, err: BadRequestError, attempted_with_temp: bool) -> bool:
+        if not attempted_with_temp:
+            return False
+        message = ""
+        if hasattr(err, "body") and isinstance(err.body, dict):
+            message = err.body.get("error", {}).get("message", "")
+        if not message:
+            message = str(err)
+        if "Unsupported parameter" in message and "temperature" in message:
+            self._temperature_supported = False
+            return True
+        return False
 
 
 def _extract_text(response: Any) -> str:
