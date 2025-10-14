@@ -43,6 +43,7 @@ def _build_run_signature(cfg: Config, world_prompt: str, planner_prompt: str, en
             "max_turns": cfg.run.max_turns,
             "stale_turn_limit": cfg.run.stale_turn_limit,
             "reflection_interval": cfg.run.reflection_interval,
+            "max_tool_rounds": cfg.run.max_tool_rounds,
             "log_dir": str(cfg.run.log_dir),
         },
         "world_prompt": world_prompt,
@@ -108,13 +109,24 @@ async def main(world_prompt: str = HELLO_TICKET_WORLD) -> None:
             active = agents[turn % 2]
             teammate = agents[(turn + 1) % 2]
             console.print(f"\n[bold magenta]Turn {turn + 1} — {active.name.capitalize()}[/]")
+            
+            # Check if this is a reflection turn
+            should_reflect = (turn + 1) % cfg.run.reflection_interval == 0
+            if should_reflect and turn > 0:  # Don't reflect on first turn
+                reflection_prompt = (
+                    "Please take a moment to reflect on progress so far. "
+                    "What has been accomplished? What are the next steps? "
+                    "Are there any blockers or concerns?"
+                )
+                active.receive(reflection_prompt)
+                console.print(f"[yellow]↻ Reflection prompt injected[/]")
 
             message, tool_calls, tool_outputs, usage = await _drive_agent_turn(
                 active,
                 teammate,
                 llm,
                 mcp,
-                max_tool_rounds=6,
+                max_tool_rounds=cfg.run.max_tool_rounds,
             )
 
             logger.log_turn(

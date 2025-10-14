@@ -58,6 +58,7 @@ OPENAI_SEED=42                # optional for reproducibility
 MAX_TURNS=20                  # default: 20 - maximum conversation turns
 STALE_TURN_LIMIT=4            # default: 4 - turns without activity before stopping
 REFLECTION_INTERVAL=6         # default: 6 - turns between reflection prompts
+MAX_TOOL_ROUNDS=6             # default: 6 - max tool call rounds per turn
 LOG_DIR=runs                  # default: runs - directory for log files
 
 # MCP Server Commands (optional overrides)
@@ -94,8 +95,14 @@ You can override run parameters via environment variables:
 # Run with more turns and different stale limit
 MAX_TURNS=30 STALE_TURN_LIMIT=6 uv run python main.py
 
-# Run sprint planning with custom parameters
-MAX_TURNS=25 REFLECTION_INTERVAL=10 python examples.py sprint_planning
+# Allow more tool calls per turn (useful for complex scenarios)
+MAX_TOOL_ROUNDS=10 python examples.py sprint_planning
+
+# Reflect more frequently (every 3 turns instead of 6)
+REFLECTION_INTERVAL=3 python examples.py documentation_sync
+
+# Combine multiple overrides
+MAX_TURNS=25 MAX_TOOL_ROUNDS=8 REFLECTION_INTERVAL=10 python examples.py sprint_planning
 
 # Use a different log directory
 LOG_DIR=my_logs python examples.py bug_triage

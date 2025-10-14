@@ -31,6 +31,7 @@ class RunConfig:
     max_turns: int = 20
     stale_turn_limit: int = 4
     reflection_interval: int = 6
+    max_tool_rounds: int = 6
     log_dir: Path = Path("runs")
     
     @staticmethod
@@ -39,6 +40,7 @@ class RunConfig:
         max_turns = int(os.getenv("MAX_TURNS", "20"))
         stale_turn_limit = int(os.getenv("STALE_TURN_LIMIT", "4"))
         reflection_interval = int(os.getenv("REFLECTION_INTERVAL", "6"))
+        max_tool_rounds = int(os.getenv("MAX_TOOL_ROUNDS", "6"))
         log_dir_str = os.getenv("LOG_DIR", "runs")
         log_dir = Path(log_dir_str)
         
@@ -46,6 +48,7 @@ class RunConfig:
             max_turns=max_turns,
             stale_turn_limit=stale_turn_limit,
             reflection_interval=reflection_interval,
+            max_tool_rounds=max_tool_rounds,
             log_dir=log_dir,
         )
 

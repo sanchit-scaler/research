@@ -271,7 +271,8 @@ You can customize the orchestrator's behavior via environment variables:
 |----------|---------|-------------|
 | `MAX_TURNS` | `20` | Maximum conversation turns before stopping |
 | `STALE_TURN_LIMIT` | `4` | Turns without activity before stopping |
-| `REFLECTION_INTERVAL` | `6` | Turns between reflection prompts |
+| `REFLECTION_INTERVAL` | `6` | Turns between reflection prompts (agents review progress) |
+| `MAX_TOOL_ROUNDS` | `6` | Maximum tool call rounds per turn |
 | `LOG_DIR` | `runs` | Directory for log files |
 
 ### Example Usage
@@ -283,11 +284,17 @@ MAX_TURNS=30 python examples.py sprint_planning
 # More patience for slower scenarios
 STALE_TURN_LIMIT=8 python examples.py bug_triage
 
+# Allow more tool calls per turn (e.g., for scenarios with lots of setup)
+MAX_TOOL_ROUNDS=10 python examples.py sprint_planning
+
+# Reflect every 3 turns for tighter feedback loops
+REFLECTION_INTERVAL=3 python examples.py documentation_sync
+
 # Custom log directory
 LOG_DIR=sprint_logs python examples.py sprint_planning
 
-# Combine multiple overrides
-MAX_TURNS=25 STALE_TURN_LIMIT=6 REFLECTION_INTERVAL=10 python examples.py hello_ticket
+# Combine multiple overrides for complex scenarios
+MAX_TURNS=25 MAX_TOOL_ROUNDS=10 STALE_TURN_LIMIT=6 REFLECTION_INTERVAL=10 python examples.py hello_ticket
 ```
 
 ## Next Steps
