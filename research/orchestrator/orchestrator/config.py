@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+from dotenv import load_dotenv
+
+
+@dataclass(slots=True)
+class OpenAIConfig:
+    api_key: str
+    model: str = "gpt-4o-mini"
+    temperature: float = 0.3
+    seed: Optional[int] = None
+
+
+@dataclass(slots=True)
+class MCPServerConfig:
+    smartsheet_cmd: str = (
+        "python /Users/apple/Github/mcp-ai-lab/smartsheet/main_mcp.py"
+    )
+    linear_cmd: str = (
+        "uv --directory /Users/apple/Github/mimicry-club run python -m apps.linear.mcp"
+    )
+
+
+@dataclass(slots=True)
+class RunConfig:
+    max_turns: int = 20
+    stale_turn_limit: int = 3
+    reflection_interval: int = 6
+    log_dir: Path = Path("runs")
+
+
+@dataclass(slots=True)
+class Config:
+    openai: OpenAIConfig
+    mcp: MCPServerConfig
+    run: RunConfig
+
+
+def load_config() -> Config:
+    load_dotenv()
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is required (set in .env)")
+
+    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    temperature = float(os.getenv("OPENAI_TEMPERATURE", "0.3"))
+    seed_val = os.getenv("OPENAI_SEED")
+    seed = int(seed_val) if seed_val else None
+
+    smartsheet_cmd = os.getenv(
+        "SMARTSHEET_MCP_CMD",
+        "python /Users/apple/Github/mcp-ai-lab/smartsheet/main_mcp.py",
+    )
+    linear_cmd = os.getenv(
+        "LINEAR_MCP_CMD",
+        "uv --directory /Users/apple/Github/mimicry-club run python -m apps.linear.mcp",
+    )
+
+    openai_cfg = OpenAIConfig(
+        api_key=api_key,
+        model=model,
+        temperature=temperature,
+        seed=seed,
+    )
+    mcp_cfg = MCPServerConfig(
+        smartsheet_cmd=smartsheet_cmd,
+        linear_cmd=linear_cmd,
+    )
+    run_cfg = RunConfig()
+
+    run_cfg.log_dir.mkdir(parents=True, exist_ok=True)
+
+    return Config(openai=openai_cfg, mcp=mcp_cfg, run=run_cfg)

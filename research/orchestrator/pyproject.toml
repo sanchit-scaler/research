@@ -1,0 +1,29 @@
+[project]
+name = "agent-orchestrator"
+version = "0.1.0"
+description = "Two-agent Hello Ticket orchestrator using Linear + Smartsheet MCP servers"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.51.0",
+    "python-dotenv>=1.0.0",
+    "mcp[cli]>=1.14.1",
+    "httpx>=0.27.0",
+    "rich>=13.7.1",
+]
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["orchestrator"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "orchestrator",
+    "README.md",
+    "pyproject.toml",
+]
