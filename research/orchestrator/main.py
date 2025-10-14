@@ -14,11 +14,16 @@ from orchestrator.logger import RunLogger
 from orchestrator.mcp_manager import MCPManager, NamespacedTool
 from orchestrator.parsing import ToolCall
 from orchestrator.prompts import (
+    ALEX_OPERATIONS_PERSONA,
     ENGINEER_PERSONA,
     ENGINEER_SYSTEM_PROMPT,
     HELLO_TICKET_WORLD,
+    JORDAN_PRODUCT_OPS_PERSONA,
     PLANNER_PERSONA,
     PLANNER_SYSTEM_PROMPT,
+    SAM_ENGINEERING_PERSONA,
+    TAYLOR_ANALYST_PERSONA,
+    TOOL_INTEGRATION_WORLD,
     build_agent_prompt,
     extract_scenario_name,
 )
@@ -27,7 +32,7 @@ from orchestrator.prompts import (
 console = Console()
 
 
-def _build_run_signature(cfg: Config, world_prompt: str, planner_prompt: str, engineer_prompt: str) -> Dict[str, Any]:
+def _build_run_signature(cfg: Config, world_prompt: str, agent_personas: Dict[str, str], composed_prompts: Dict[str, str]) -> Dict[str, Any]:
     """Build a run signature containing configuration and prompts for this run."""
     return {
         "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -47,14 +52,8 @@ def _build_run_signature(cfg: Config, world_prompt: str, planner_prompt: str, en
             "log_dir": str(cfg.run.log_dir),
         },
         "world_prompt": world_prompt,
-        "agent_personas": {
-            "planner": PLANNER_PERSONA,
-            "engineer": ENGINEER_PERSONA,
-        },
-        "composed_prompts": {
-            "planner": planner_prompt,
-            "engineer": engineer_prompt,
-        },
+        "agent_personas": agent_personas,
+        "composed_prompts": composed_prompts,
     }
 
 
@@ -66,12 +65,44 @@ async def main(world_prompt: str = HELLO_TICKET_WORLD) -> None:
     """
     cfg = load_config()
     
-    # Compose agent prompts with the world context
-    planner_persona_prompt = build_agent_prompt(world_prompt, PLANNER_PERSONA)
-    engineer_persona_prompt = build_agent_prompt(world_prompt, ENGINEER_PERSONA)
+    # Determine if this is a 4-agent scenario (tool integration) or 2-agent scenario
+    is_four_agent = world_prompt == TOOL_INTEGRATION_WORLD
+    
+    if is_four_agent:
+        # 4-agent team: Alex, Sam, Jordan, Taylor
+        alex_prompt = build_agent_prompt(world_prompt, ALEX_OPERATIONS_PERSONA)
+        sam_prompt = build_agent_prompt(world_prompt, SAM_ENGINEERING_PERSONA)
+        jordan_prompt = build_agent_prompt(world_prompt, JORDAN_PRODUCT_OPS_PERSONA)
+        taylor_prompt = build_agent_prompt(world_prompt, TAYLOR_ANALYST_PERSONA)
+        
+        agent_personas = {
+            "alex": ALEX_OPERATIONS_PERSONA,
+            "sam": SAM_ENGINEERING_PERSONA,
+            "jordan": JORDAN_PRODUCT_OPS_PERSONA,
+            "taylor": TAYLOR_ANALYST_PERSONA,
+        }
+        composed_prompts = {
+            "alex": alex_prompt,
+            "sam": sam_prompt,
+            "jordan": jordan_prompt,
+            "taylor": taylor_prompt,
+        }
+    else:
+        # 2-agent team: Planner, Engineer (original)
+        planner_prompt = build_agent_prompt(world_prompt, PLANNER_PERSONA)
+        engineer_prompt = build_agent_prompt(world_prompt, ENGINEER_PERSONA)
+        
+        agent_personas = {
+            "planner": PLANNER_PERSONA,
+            "engineer": ENGINEER_PERSONA,
+        }
+        composed_prompts = {
+            "planner": planner_prompt,
+            "engineer": engineer_prompt,
+        }
     
     # Build run signature with configuration details
-    run_signature = _build_run_signature(cfg, world_prompt, planner_persona_prompt, engineer_persona_prompt)
+    run_signature = _build_run_signature(cfg, world_prompt, agent_personas, composed_prompts)
     
     # Extract scenario name for log filename
     scenario_name = extract_scenario_name(world_prompt)
@@ -98,16 +129,25 @@ async def main(world_prompt: str = HELLO_TICKET_WORLD) -> None:
             console.print(f"  {name}: {result}")
         logger.log_event("health_probe", {"results": health})
 
-        planner_prompt = _build_prompt(planner_persona_prompt, tools)
-        engineer_prompt = _build_prompt(engineer_persona_prompt, tools)
-
-        planner = AgentState("planner", planner_prompt)
-        engineer = AgentState("engineer", engineer_prompt)
-        agents = [planner, engineer]
+        # Create agents based on configuration
+        if is_four_agent:
+            alex = AgentState("alex", _build_prompt(alex_prompt, tools))
+            sam = AgentState("sam", _build_prompt(sam_prompt, tools))
+            jordan = AgentState("jordan", _build_prompt(jordan_prompt, tools))
+            taylor = AgentState("taylor", _build_prompt(taylor_prompt, tools))
+            agents = [alex, sam, jordan, taylor]
+            num_agents = 4
+        else:
+            planner = AgentState("planner", _build_prompt(composed_prompts["planner"], tools))
+            engineer = AgentState("engineer", _build_prompt(composed_prompts["engineer"], tools))
+            agents = [planner, engineer]
+            num_agents = 2
 
         for turn in range(cfg.run.max_turns):
-            active = agents[turn % 2]
-            teammate = agents[(turn + 1) % 2]
+            active = agents[turn % num_agents]
+            # Get all teammates (everyone except active agent)
+            teammates = [a for a in agents if a != active]
+            
             console.print(f"\n[bold magenta]Turn {turn + 1} — {active.name.capitalize()}[/]")
             
             # Check if this is a reflection turn
@@ -123,7 +163,7 @@ async def main(world_prompt: str = HELLO_TICKET_WORLD) -> None:
 
             message, tool_calls, tool_outputs, usage = await _drive_agent_turn(
                 active,
-                teammate,
+                teammates,
                 llm,
                 mcp,
                 max_tool_rounds=cfg.run.max_tool_rounds,
@@ -177,7 +217,7 @@ def _build_prompt(base_prompt: str, tools: List[NamespacedTool]) -> str:
 
 async def _drive_agent_turn(
     agent: AgentState,
-    teammate: AgentState,
+    teammates: List[AgentState],
     llm: OpenAIClient,
     mcp: MCPManager,
     *,
@@ -223,8 +263,9 @@ async def _drive_agent_turn(
             natural_text = _extract_message_text(response)
             if natural_text:
                 console.print(f"[cyan]{agent.name}:[/] {natural_text}")
-                # Output message already persisted via add_output_items; just notify teammate
-                teammate.receive(f"{agent.name}: {natural_text}")
+                # Output message already persisted via add_output_items; broadcast to all teammates
+                for teammate in teammates:
+                    teammate.receive(f"{agent.name}: {natural_text}")
             return natural_text, accumulated_tool_calls, tool_outputs, usage
 
         # Execute each tool call serially
@@ -255,8 +296,9 @@ async def _drive_agent_turn(
                 # Log as a tool call/output for consistency
                 accumulated_tool_calls.append(ToolCall(name="orchestrator.finish", arguments=arguments if isinstance(arguments, dict) else {}))
                 tool_outputs.append({"name": "orchestrator.finish", "arguments": arguments, "output": "finished"})
-                # Notify teammate with concise summary
-                teammate.receive(f"{agent.name} finished: {summary}")
+                # Notify all teammates with concise summary
+                for teammate in teammates:
+                    teammate.receive(f"{agent.name} finished: {summary}")
                 return "__RUN_FINISHED__", accumulated_tool_calls, tool_outputs, usage
 
             # Log to console
@@ -284,12 +326,13 @@ async def _drive_agent_turn(
                             "output": output_str,
                         }
                     )
-                # Send a short summary to teammate to keep them aware
+                # Send a short summary to all teammates to keep them aware
                 summary = (output_str or "(no content)").strip()
                 summary = " ".join(summary.split())
-                teammate.receive(
-                    f"{agent.name} tool {fq}: {summary[:400]}"
-                )
+                for teammate in teammates:
+                    teammate.receive(
+                        f"{agent.name} tool {fq}: {summary[:400]}"
+                    )
             except Exception as exc:  # noqa: BLE001
                 error_message = f"[tool-error:{fq}] {exc}"
                 console.print(f"[red]{error_message}[/]")
@@ -309,7 +352,8 @@ async def _drive_agent_turn(
                             "output": str(exc),
                         }
                     )
-                teammate.receive(f"{agent.name} tool {fq} failed: {exc}")
+                for teammate in teammates:
+                    teammate.receive(f"{agent.name} tool {fq} failed: {exc}")
 
     console.print(
         "[red]Max tool rounds reached without natural response; handing over turn.[/]"

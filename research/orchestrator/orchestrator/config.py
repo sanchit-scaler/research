@@ -28,19 +28,19 @@ class MCPServerConfig:
 
 @dataclass(slots=True)
 class RunConfig:
-    max_turns: int = 20
-    stale_turn_limit: int = 4
-    reflection_interval: int = 6
-    max_tool_rounds: int = 6
+    max_turns: int = 40
+    stale_turn_limit: int = 6
+    reflection_interval: int = 8
+    max_tool_rounds: int = 8
     log_dir: Path = Path("runs")
     
     @staticmethod
     def from_env() -> "RunConfig":
         """Load run configuration from environment variables with defaults."""
-        max_turns = int(os.getenv("MAX_TURNS", "20"))
-        stale_turn_limit = int(os.getenv("STALE_TURN_LIMIT", "4"))
-        reflection_interval = int(os.getenv("REFLECTION_INTERVAL", "6"))
-        max_tool_rounds = int(os.getenv("MAX_TOOL_ROUNDS", "6"))
+        max_turns = int(os.getenv("MAX_TURNS", "40"))
+        stale_turn_limit = int(os.getenv("STALE_TURN_LIMIT", "6"))
+        reflection_interval = int(os.getenv("REFLECTION_INTERVAL", "8"))
+        max_tool_rounds = int(os.getenv("MAX_TOOL_ROUNDS", "8"))
         log_dir_str = os.getenv("LOG_DIR", "runs")
         log_dir = Path(log_dir_str)
         

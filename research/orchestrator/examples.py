@@ -6,6 +6,7 @@ Usage:
     python examples.py bug_triage
     python examples.py sprint_planning
     python examples.py documentation_sync
+    python examples.py tool_integration
     python examples.py custom
 """
 
@@ -18,6 +19,7 @@ from orchestrator.prompts import (
     DOCUMENTATION_SYNC_WORLD,
     HELLO_TICKET_WORLD,
     SPRINT_PLANNING_WORLD,
+    TOOL_INTEGRATION_WORLD,
 )
 
 
@@ -49,6 +51,7 @@ SCENARIOS = {
     "bug_triage": BUG_TRIAGE_WORLD,
     "sprint_planning": SPRINT_PLANNING_WORLD,
     "documentation_sync": DOCUMENTATION_SYNC_WORLD,
+    "tool_integration": TOOL_INTEGRATION_WORLD,
     "custom": CUSTOM_SCENARIO,
 }
 
