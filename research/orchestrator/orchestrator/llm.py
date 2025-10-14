@@ -37,6 +37,33 @@ class OpenAIClient:
         usage = getattr(response, "usage", {})
         return text.strip(), usage
 
+    async def respond_with_tools(
+        self,
+        inputs: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
+        *,
+        max_output_tokens: int = 600,
+        parallel_tool_calls: bool = False,
+        tool_choice: Any = "auto",
+    ) -> Any:
+        """Call the Responses API with tool definitions and mixed inputs.
+
+        Returns the raw response object so callers can inspect tool calls.
+        """
+        kwargs: Dict[str, Any] = {
+            "model": self._model,
+            "temperature": self._temperature,
+            "input": inputs,
+            "tools": tools,
+            "max_output_tokens": max_output_tokens,
+            "parallel_tool_calls": parallel_tool_calls,
+            "tool_choice": tool_choice,
+        }
+        if self._seed is not None:
+            kwargs["seed"] = self._seed
+
+        return await self._client.responses.create(**kwargs)
+
 
 def _extract_text(response: Any) -> str:
     try:

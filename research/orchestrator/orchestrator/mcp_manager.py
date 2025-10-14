@@ -77,6 +77,8 @@ class MCPManager:
             "linear": MCPServerHandle("linear", cfg.linear_cmd),
         }
         self._tools: Dict[str, NamespacedTool] = {}
+        # Mapping between OpenAI tool function names and namespaced MCP tool names
+        self._openai_name_to_fq: Dict[str, str] = {}
 
     async def connect_all(self) -> List[NamespacedTool]:
         tools: List[NamespacedTool] = []
@@ -121,6 +123,47 @@ class MCPManager:
     def available_tools(self) -> List[NamespacedTool]:
         return list(self._tools.values())
 
+    def openai_tools(self) -> List[dict]:
+        """Convert discovered MCP tools to OpenAI function tool definitions.
+
+        Returns a list of dicts suitable for the OpenAI Responses API `tools` param.
+        Also populates an internal mapping from OpenAI tool names to MCP fq names.
+        """
+        defs: List[dict] = []
+        self._openai_name_to_fq.clear()
+        for ns_tool in self.available_tools():
+            fq = ns_tool.fq_name  # e.g., "smartsheet.health_check"
+            # Sanitize: OpenAI tool names cannot include '.'; map to namespace__name
+            sanitized = fq.replace(".", "__")
+            self._openai_name_to_fq[sanitized] = fq
+
+            schema = _extract_input_schema(ns_tool.definition)
+            defs.append(
+                {
+                    "type": "function",
+                    "name": sanitized,
+                    "description": ns_tool.definition.description or "",
+                    # Use permissive schema if none provided
+                    "parameters": schema
+                    if schema is not None
+                    else {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": True,
+                    },
+                }
+            )
+        return defs
+
+    def resolve_openai_tool_name(self, tool_name: str) -> str:
+        """Map a sanitized OpenAI tool name back to an MCP fully-qualified name."""
+        if tool_name in self._openai_name_to_fq:
+            return self._openai_name_to_fq[tool_name]
+        # Best effort: if already fq, return as-is
+        if "." in tool_name:
+            return tool_name
+        raise KeyError(f"Unknown tool: {tool_name}")
+
     @staticmethod
     def _split_namespace(namespaced_tool: str) -> Tuple[str, str]:
         if "." not in namespaced_tool:
@@ -145,3 +188,21 @@ def _build_stdio_params(cmd_parts: List[str]) -> StdioServerParameters:
     command = cmd_parts[0]
     args = cmd_parts[1:]
     return StdioServerParameters(command=command, args=args, env=None)
+
+
+def _extract_input_schema(tool_def: Tool):
+    # Try several common attribute names and shapes
+    for attr in ("input_schema", "inputSchema", "inputschema", "schema"):
+        if hasattr(tool_def, attr):
+            schema = getattr(tool_def, attr)
+            if schema is None:
+                return None
+            # Pydantic-style objects
+            if hasattr(schema, "model_dump"):
+                return schema.model_dump()
+            if hasattr(schema, "to_dict"):
+                return schema.to_dict()
+            if isinstance(schema, dict):
+                return schema
+    # Some MCP servers may not provide a schema
+    return None

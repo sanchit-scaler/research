@@ -10,7 +10,7 @@ from orchestrator.config import load_config
 from orchestrator.llm import OpenAIClient
 from orchestrator.logger import RunLogger
 from orchestrator.mcp_manager import MCPManager, NamespacedTool
-from orchestrator.parsing import ToolCall, extract_tool_calls, strip_tool_call_lines
+from orchestrator.parsing import ToolCall
 from orchestrator.prompts import ENGINEER_SYSTEM_PROMPT, PLANNER_SYSTEM_PROMPT
 
 
@@ -97,8 +97,8 @@ def _build_prompt(base_prompt: str, tools: List[NamespacedTool]) -> str:
         f"{base_prompt}\n\n"
         "Available MCP tools:\n"
         f"{tool_text}\n"
-        "Always reference tools by their fully-qualified name.\n"
-        "If you do not need a tool call, respond with natural language."
+        "Tools are provided as callable functions; use them when needed.\n"
+        "If no tool is needed, reply with concise natural language."
     )
 
 
@@ -114,60 +114,134 @@ async def _drive_agent_turn(
     tool_outputs: List[dict] = []
     usage = None
 
-    for _ in range(max_tool_rounds):
-        response_text, usage = await llm.complete(agent.build_messages())
-        try:
-            tool_calls = extract_tool_calls(response_text)
-        except ValueError as exc:
-            natural_text = response_text.strip()
-            if natural_text:
-                console.print(f"[yellow]{agent.name} formatting issue:[/] {exc}")
-                agent.respond(natural_text)
-                teammate.receive(f"{agent.name}: {natural_text}")
-            return natural_text, accumulated_tool_calls, tool_outputs, usage
-        natural_text = strip_tool_call_lines(response_text)
+    # Convert MCP tools to OpenAI tools once per turn
+    oi_tools = mcp.openai_tools()
 
-        if natural_text:
-            console.print(f"[cyan]{agent.name}:[/] {natural_text}")
-            agent.respond(natural_text)
-            teammate.receive(f"{agent.name}: {natural_text}")
+    inputs = agent.build_inputs()
+    rounds = 0
+    while rounds < max_tool_rounds:
+        rounds += 1
+        response = await llm.respond_with_tools(
+            inputs,
+            tools=oi_tools,
+            parallel_tool_calls=False,
+            tool_choice="auto",
+        )
+
+        usage = getattr(response, "usage", None)
+
+        # Persist raw output items (reasoning/function_call/message) to agent
+        try:
+            output_items = list(response.output)
+        except Exception:
+            output_items = []
+        if output_items:
+            agent.add_output_items(output_items)
+            inputs.extend(output_items)
+
+        # Collect function calls
+        tool_calls = []
+        for item in output_items:
+            if getattr(item, "type", None) == "function_call":
+                tool_calls.append(item)
 
         if not tool_calls:
+            # No tool calls, extract natural language if present
+            natural_text = _extract_message_text(response)
+            if natural_text:
+                console.print(f"[cyan]{agent.name}:[/] {natural_text}")
+                # Output message already persisted via add_output_items; just notify teammate
+                teammate.receive(f"{agent.name}: {natural_text}")
             return natural_text, accumulated_tool_calls, tool_outputs, usage
 
-        accumulated_tool_calls.extend(tool_calls)
+        # Execute each tool call serially
+        for fc in tool_calls:
+            name = getattr(fc, "name", "")
+            args_json = getattr(fc, "arguments", "{}")
+            call_id = getattr(fc, "call_id", None)
 
-        for call in tool_calls:
-            console.print(f"[blue]→ {call.name} {call.arguments}[/]")
             try:
-                rendered, raw = await mcp.call(call.name, call.arguments)
-                console.print(f"[blue]← {rendered}[/]" if rendered else "[blue]← (no content)[/]")
-                tool_outputs.append(
-                    {"name": call.name, "arguments": call.arguments, "output": rendered}
+                fq = mcp.resolve_openai_tool_name(name)
+            except KeyError:
+                fq = name  # fallback
+
+            try:
+                import json as _json
+
+                arguments = _json.loads(args_json) if isinstance(args_json, str) else (args_json or {})
+            except Exception:
+                arguments = {}
+
+            # Log to console
+            console.print(f"[blue]→ {fq} {arguments}[/]")
+
+            try:
+                rendered, raw = await mcp.call(fq, arguments)
+                console.print(
+                    f"[blue]← {rendered}[/]" if rendered else "[blue]← (no content)[/]"
                 )
-                agent.receive(f"[tool:{call.name}] {rendered}")
-                summary = (rendered or "(no content)").strip()
+                tool_outputs.append(
+                    {"name": fq, "arguments": arguments, "output": rendered}
+                )
+                accumulated_tool_calls.append(
+                    ToolCall(name=fq, arguments=arguments)
+                )
+                # Provide tool output to the model
+                output_str = rendered if isinstance(rendered, str) else str(rendered)
+                if call_id:
+                    agent.add_function_output(call_id, output_str)
+                    inputs.append(
+                        {
+                            "type": "function_call_output",
+                            "call_id": call_id,
+                            "output": output_str,
+                        }
+                    )
+                # Send a short summary to teammate to keep them aware
+                summary = (output_str or "(no content)").strip()
                 summary = " ".join(summary.split())
                 teammate.receive(
-                    f"{agent.name} tool {call.name}: {summary[:400]}"  # keep context tight
+                    f"{agent.name} tool {fq}: {summary[:400]}"
                 )
             except Exception as exc:  # noqa: BLE001
-                error_message = f"[tool-error:{call.name}] {exc}"
+                error_message = f"[tool-error:{fq}] {exc}"
                 console.print(f"[red]{error_message}[/]")
                 tool_outputs.append(
                     {
-                        "name": call.name,
-                        "arguments": call.arguments,
+                        "name": fq,
+                        "arguments": arguments,
                         "error": str(exc),
                     }
                 )
-                agent.receive(error_message)
-                teammate.receive(f"{agent.name} tool {call.name} failed: {exc}")
+                if call_id:
+                    agent.add_function_output(call_id, str(exc))
+                    inputs.append(
+                        {
+                            "type": "function_call_output",
+                            "call_id": call_id,
+                            "output": str(exc),
+                        }
+                    )
+                teammate.receive(f"{agent.name} tool {fq} failed: {exc}")
 
     console.print(
         "[red]Max tool rounds reached without natural response; handing over turn.[/]"
     )
     return "", accumulated_tool_calls, tool_outputs, usage
+
+
+def _extract_message_text(response) -> str:
+    try:
+        parts = []
+        for block in response.output:
+            if getattr(block, "type", None) != "message":
+                continue
+            for item in getattr(block, "content", []):
+                if getattr(item, "type", None) == "output_text":
+                    parts.append(getattr(item, "text", ""))
+        return "\n".join(p for p in parts if p).strip()
+    except Exception:
+        return ""
 
 
 if __name__ == "__main__":
