@@ -96,6 +96,26 @@ def build_agent_prompt(persona: str, world: str) -> str:
     return f"{world.strip()}\n\n{persona.strip()}"
 
 
+def extract_scenario_name(world_prompt: str) -> str:
+    """Extract a clean scenario name from the world prompt for use in log filenames.
+    
+    Looks for '## Scenario: <name>' pattern and converts to snake_case.
+    Falls back to 'scenario' if pattern not found.
+    """
+    import re
+    
+    # Try to find the scenario title
+    match = re.search(r'##\s*Scenario:\s*(.+)', world_prompt)
+    if match:
+        scenario_title = match.group(1).strip()
+        # Convert to snake_case: lowercase, replace spaces/special chars with underscore
+        scenario_name = re.sub(r'[^\w\s-]', '', scenario_title.lower())
+        scenario_name = re.sub(r'[-\s]+', '_', scenario_name)
+        return scenario_name
+    
+    return "scenario"
+
+
 # ============================================================================
 # ADDITIONAL SCENARIO EXAMPLES
 # ============================================================================

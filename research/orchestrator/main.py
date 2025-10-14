@@ -20,6 +20,7 @@ from orchestrator.prompts import (
     PLANNER_PERSONA,
     PLANNER_SYSTEM_PROMPT,
     build_agent_prompt,
+    extract_scenario_name,
 )
 
 
@@ -71,7 +72,10 @@ async def main(world_prompt: str = HELLO_TICKET_WORLD) -> None:
     # Build run signature with configuration details
     run_signature = _build_run_signature(cfg, world_prompt, planner_persona_prompt, engineer_persona_prompt)
     
-    logger = RunLogger(cfg.run.log_dir, run_signature=run_signature)
+    # Extract scenario name for log filename
+    scenario_name = extract_scenario_name(world_prompt)
+    
+    logger = RunLogger(cfg.run.log_dir, run_signature=run_signature, scenario_name=scenario_name)
     mcp = MCPManager(cfg.mcp)
     llm = OpenAIClient(cfg.openai)
 

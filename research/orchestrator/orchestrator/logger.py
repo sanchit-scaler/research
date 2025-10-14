@@ -9,9 +9,14 @@ from .parsing import ToolCall
 
 
 class RunLogger:
-    def __init__(self, log_dir: Path, run_signature: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(
+        self, 
+        log_dir: Path, 
+        run_signature: Optional[Dict[str, Any]] = None,
+        scenario_name: str = "hello_ticket"
+    ) -> None:
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        self.path = log_dir / f"hello_ticket_{timestamp}.jsonl"
+        self.path = log_dir / f"{scenario_name}_{timestamp}.jsonl"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._file = self.path.open("w", encoding="utf-8")
         

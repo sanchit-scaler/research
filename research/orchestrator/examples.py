@@ -67,7 +67,8 @@ async def run_scenario(scenario_name: str):
         sys.exit(1)
 
     world_prompt = SCENARIOS[scenario_name]
-    print(f"🚀 Running scenario: {scenario_name}\n")
+    print(f"🚀 Running scenario: {scenario_name}")
+    print(f"📝 Log file will be: runs/<scenario_name>_<timestamp>.jsonl\n")
     await main(world_prompt=world_prompt)
 
 

@@ -87,7 +87,11 @@ The orchestrator will:
    - `smartsheet.health_check`
    - `linear.list_teams(limit=1)`
 3. Alternate turns between Planner and Engineer until success or stop condition.
-4. Log every turn to `runs/hello_ticket_<timestamp>.jsonl` (messages, tool calls, results, tokens).
+4. Log every turn to `runs/<scenario_name>_<timestamp>.jsonl` (messages, tool calls, results, tokens).
+   - Default scenario: `runs/hello_ticket_<timestamp>.jsonl`
+   - Bug triage: `runs/bug_triage_and_investigation_<timestamp>.jsonl`
+   - Sprint planning: `runs/sprint_planning_<timestamp>.jsonl`
+   - Documentation sync: `runs/documentation_sync_<timestamp>.jsonl`
 
 See [SCENARIOS.md](./SCENARIOS.md) for creating custom scenarios.
 
