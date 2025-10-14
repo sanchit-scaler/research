@@ -9,11 +9,15 @@ from .parsing import ToolCall
 
 
 class RunLogger:
-    def __init__(self, log_dir: Path) -> None:
+    def __init__(self, log_dir: Path, run_signature: Optional[Dict[str, Any]] = None) -> None:
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         self.path = log_dir / f"hello_ticket_{timestamp}.jsonl"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._file = self.path.open("w", encoding="utf-8")
+        
+        # Write run signature as the first line if provided
+        if run_signature:
+            self.log_event("run_signature", run_signature)
 
     def log_event(self, event: str, payload: Dict[str, Any]) -> None:
         record = {"type": event, **payload}

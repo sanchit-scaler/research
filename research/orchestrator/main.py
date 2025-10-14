@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
-from typing import List
+import os
+from datetime import datetime
+from typing import Any, Dict, List
 
 from rich.console import Console
 
 from orchestrator.agent_state import AgentState
-from orchestrator.config import load_config
+from orchestrator.config import Config, load_config
 from orchestrator.llm import OpenAIClient
 from orchestrator.logger import RunLogger
 from orchestrator.mcp_manager import MCPManager, NamespacedTool
@@ -17,9 +19,38 @@ from orchestrator.prompts import ENGINEER_SYSTEM_PROMPT, PLANNER_SYSTEM_PROMPT
 console = Console()
 
 
+def _build_run_signature(cfg: Config) -> Dict[str, Any]:
+    """Build a run signature containing configuration and prompts for this run."""
+    return {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "environment": {
+            "openai_api_key": "***" if cfg.openai.api_key else None,
+            "openai_model": cfg.openai.model,
+            "openai_temperature": cfg.openai.temperature,
+            "openai_seed": cfg.openai.seed,
+            "smartsheet_mcp_cmd": cfg.mcp.smartsheet_cmd,
+            "linear_mcp_cmd": cfg.mcp.linear_cmd,
+        },
+        "run_config": {
+            "max_turns": cfg.run.max_turns,
+            "stale_turn_limit": cfg.run.stale_turn_limit,
+            "reflection_interval": cfg.run.reflection_interval,
+            "log_dir": str(cfg.run.log_dir),
+        },
+        "agent_prompts": {
+            "planner": PLANNER_SYSTEM_PROMPT,
+            "engineer": ENGINEER_SYSTEM_PROMPT,
+        },
+    }
+
+
 async def main() -> None:
     cfg = load_config()
-    logger = RunLogger(cfg.run.log_dir)
+    
+    # Build run signature with configuration details
+    run_signature = _build_run_signature(cfg)
+    
+    logger = RunLogger(cfg.run.log_dir, run_signature=run_signature)
     mcp = MCPManager(cfg.mcp)
     llm = OpenAIClient(cfg.openai)
 
