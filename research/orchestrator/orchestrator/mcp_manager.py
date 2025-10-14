@@ -153,6 +153,39 @@ class MCPManager:
                     },
                 }
             )
+        # Add a synthetic orchestrator finish tool so agents can explicitly end the run
+        finish_name = "orchestrator__finish"
+        self._openai_name_to_fq[finish_name] = "orchestrator.finish"
+        defs.append(
+            {
+                "type": "function",
+                "name": finish_name,
+                "description": "End the run when objectives are complete. Provide a concise summary and relevant links.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "summary": {
+                            "type": "string",
+                            "description": "One-paragraph summary of what was done and key artifacts (IDs, links).",
+                        },
+                        "status": {
+                            "type": "string",
+                            "description": "Final status label (e.g., completed, blocked, parked).",
+                        },
+                        "links": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "description": "URLs to created items (Linear issues, Smartsheet rows, etc.)",
+                            },
+                            "description": "List of relevant links.",
+                        },
+                    },
+                    "required": ["summary"],
+                    "additionalProperties": True,
+                },
+            }
+        )
         return defs
 
     def resolve_openai_tool_name(self, tool_name: str) -> str:

@@ -58,7 +58,7 @@ async def main() -> None:
                 teammate,
                 llm,
                 mcp,
-                max_tool_rounds=3,
+                max_tool_rounds=6,
             )
 
             logger.log_turn(
@@ -69,6 +69,11 @@ async def main() -> None:
                 tool_outputs=tool_outputs,
                 usage=usage,
             )
+
+            # If a finish tool was invoked, end the run immediately
+            if message == "__RUN_FINISHED__":
+                console.print("\n[bold green]Run finished by agent.[/]")
+                break
 
             activity = bool(tool_calls) or bool(message and message.strip())
             if activity:
@@ -171,6 +176,20 @@ async def _drive_agent_turn(
                 arguments = _json.loads(args_json) if isinstance(args_json, str) else (args_json or {})
             except Exception:
                 arguments = {}
+
+            # Handle synthetic finish tool locally
+            if name in ("orchestrator__finish",) or fq in ("orchestrator.finish",):
+                summary = arguments.get("summary", "Run finished.") if isinstance(arguments, dict) else "Run finished."
+                console.print(f"[green]↳ Finish:[/] {summary}")
+                if call_id:
+                    agent.add_function_output(call_id, "finished")
+                    inputs.append({"type": "function_call_output", "call_id": call_id, "output": "finished"})
+                # Log as a tool call/output for consistency
+                accumulated_tool_calls.append(ToolCall(name="orchestrator.finish", arguments=arguments if isinstance(arguments, dict) else {}))
+                tool_outputs.append({"name": "orchestrator.finish", "arguments": arguments, "output": "finished"})
+                # Notify teammate with concise summary
+                teammate.receive(f"{agent.name} finished: {summary}")
+                return "__RUN_FINISHED__", accumulated_tool_calls, tool_outputs, usage
 
             # Log to console
             console.print(f"[blue]→ {fq} {arguments}[/]")

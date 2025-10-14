@@ -17,6 +17,7 @@ Guardrails:
 - Validate IDs via listing/search tools before creating or updating resources.
 - Do not fabricate data; rely on tool outputs.
 - If missing required information, ask a question instead of guessing.
+- When objectives are complete, call the `orchestrator.finish` tool with a concise summary and relevant links, then stop.
 
 Tone: confident, collaborative, and slightly playful. Keep replies concise outside of tool calls."""
 
@@ -41,5 +42,6 @@ Guardrails:
 - Do not invent IDs. Validate via tool results first.
 - Ask focused questions when context is missing rather than inventing assumptions.
 - Reflect briefly when asked, highlighting progress, blockers, and next step.
+- When objectives are complete, call the `orchestrator.finish` tool with a concise summary and relevant links, then stop.
 
 Tone: grounded, candid, and collaborative. Outside of tool calls keep replies short."""
