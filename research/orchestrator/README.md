@@ -46,15 +46,21 @@ cp .env.example .env
 Edit `.env` and set:
 
 ```env
+# Required
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini      # optional override
-OPENAI_TEMPERATURE=0.3        # optional override
+
+# OpenAI Configuration (optional overrides)
+OPENAI_MODEL=gpt-4o-mini      # default: gpt-4o-mini
+OPENAI_TEMPERATURE=0.3        # default: 0.3
 OPENAI_SEED=42                # optional for reproducibility
-```
 
-Optional overrides for spawning MCP servers:
+# Run Configuration (optional overrides)
+MAX_TURNS=20                  # default: 20 - maximum conversation turns
+STALE_TURN_LIMIT=4            # default: 4 - turns without activity before stopping
+REFLECTION_INTERVAL=6         # default: 6 - turns between reflection prompts
+LOG_DIR=runs                  # default: runs - directory for log files
 
-```env
+# MCP Server Commands (optional overrides)
 SMARTSHEET_MCP_CMD=python /Users/apple/Github/mcp-ai-lab/smartsheet/main_mcp.py
 LINEAR_MCP_CMD=uv --directory /Users/apple/Github/mimicry-club run python -m apps.linear.mcp
 ```
@@ -78,6 +84,21 @@ python examples.py sprint_planning
 
 # Run documentation sync workflow
 python examples.py documentation_sync
+```
+
+### Run with Custom Configuration
+
+You can override run parameters via environment variables:
+
+```bash
+# Run with more turns and different stale limit
+MAX_TURNS=30 STALE_TURN_LIMIT=6 uv run python main.py
+
+# Run sprint planning with custom parameters
+MAX_TURNS=25 REFLECTION_INTERVAL=10 python examples.py sprint_planning
+
+# Use a different log directory
+LOG_DIR=my_logs python examples.py bug_triage
 ```
 
 The orchestrator will:

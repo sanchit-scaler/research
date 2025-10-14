@@ -32,6 +32,22 @@ class RunConfig:
     stale_turn_limit: int = 4
     reflection_interval: int = 6
     log_dir: Path = Path("runs")
+    
+    @staticmethod
+    def from_env() -> "RunConfig":
+        """Load run configuration from environment variables with defaults."""
+        max_turns = int(os.getenv("MAX_TURNS", "20"))
+        stale_turn_limit = int(os.getenv("STALE_TURN_LIMIT", "4"))
+        reflection_interval = int(os.getenv("REFLECTION_INTERVAL", "6"))
+        log_dir_str = os.getenv("LOG_DIR", "runs")
+        log_dir = Path(log_dir_str)
+        
+        return RunConfig(
+            max_turns=max_turns,
+            stale_turn_limit=stale_turn_limit,
+            reflection_interval=reflection_interval,
+            log_dir=log_dir,
+        )
 
 
 @dataclass(slots=True)
@@ -72,7 +88,7 @@ def load_config() -> Config:
         smartsheet_cmd=smartsheet_cmd,
         linear_cmd=linear_cmd,
     )
-    run_cfg = RunConfig()
+    run_cfg = RunConfig.from_env()
 
     run_cfg.log_dir.mkdir(parents=True, exist_ok=True)
 

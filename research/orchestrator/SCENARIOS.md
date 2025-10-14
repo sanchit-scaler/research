@@ -261,10 +261,40 @@ python examples.py bug_triage
 python examples.py sprint_planning
 ```
 
+## Configuration Options
+
+You can customize the orchestrator's behavior via environment variables:
+
+### Run Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MAX_TURNS` | `20` | Maximum conversation turns before stopping |
+| `STALE_TURN_LIMIT` | `4` | Turns without activity before stopping |
+| `REFLECTION_INTERVAL` | `6` | Turns between reflection prompts |
+| `LOG_DIR` | `runs` | Directory for log files |
+
+### Example Usage
+
+```bash
+# Longer conversation for complex scenarios
+MAX_TURNS=30 python examples.py sprint_planning
+
+# More patience for slower scenarios
+STALE_TURN_LIMIT=8 python examples.py bug_triage
+
+# Custom log directory
+LOG_DIR=sprint_logs python examples.py sprint_planning
+
+# Combine multiple overrides
+MAX_TURNS=25 STALE_TURN_LIMIT=6 REFLECTION_INTERVAL=10 python examples.py hello_ticket
+```
+
 ## Next Steps
 
 1. **Try the examples** - Run `python examples.py hello_ticket`
 2. **Create your own scenario** - Use the template above
 3. **Extend agent personas** - Add new agent types if needed
 4. **Share scenarios** - Document effective scenarios for reuse
+5. **Tune parameters** - Adjust `MAX_TURNS`, `STALE_TURN_LIMIT`, etc. for your needs
 
