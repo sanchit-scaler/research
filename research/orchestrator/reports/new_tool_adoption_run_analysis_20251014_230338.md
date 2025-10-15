@@ -322,9 +322,11 @@ This report provides a comprehensive analysis of an ambitious multi-agent orches
 4. **Respect for Tool Boundaries:** Agents maintained Linear as system of record while building Smartsheet layer
 
 **Challenges Observed:**
-1. **Repetitive Consensus:** Last 12 turns largely repeated same validation messages
-2. **No Natural Termination:** Run hit max_turns limit; agents didn't detect completion
-3. **Limited Conflict:** All agents eventually agreed; no scenario where adoption was rejected
+1. **Repetitive Consensus:** Turns 29-40 (12 turns) largely repeated same validation messages despite completing work at turn 35
+2. **Reflection Didn't Stop Loops:** Reflection prompts triggered at turns 9, 18, 27, 36 but agents continued verbal validation loops anyway
+3. **Post-Completion Validation Loop:** After completing dashboard at turn 35, agents spent 5 turns validating instead of calling finish or identifying new work
+4. **"Action Over Discussion" Bias Insufficient:** Despite explicit prompts encouraging action, agents defaulted to discussing completed work
+5. **Limited Conflict:** All agents eventually agreed; no scenario where adoption was rejected
 
 ### 6.2 Scenario Authenticity
 
@@ -453,8 +455,8 @@ The "New Tool Adoption" scenario didn't have explicit success criteria like "Hel
 
 **Orchestrator Configuration:**
 - Max Turns: 40 (100% capacity used - hit limit)
-- Stale Turn Limit: 4 (not triggered)
-- Reflection Interval: 9 (would trigger at turn 45, not reached)
+- Stale Turn Limit: 4 agents × 4 turns = 16 turns after last tool call (would have triggered at turn 51: last tool call turn 35 + 16, but max_turns reached first)
+- Reflection Interval: 9 (triggered at turns 9, 18, 27, 36 - visible in logs as "Action-focused reflection prompt injected")
 - Max Tool Rounds: 10 (never needed)
 - Log Directory: `runs/`
 
@@ -516,15 +518,18 @@ The "New Tool Adoption" scenario didn't have explicit success criteria like "Hel
 
 ### 10.2 What Needs Improvement
 
-1. **No Natural Termination:**
-   - Agents hit max_turns limit without calling `orchestrator.finish`
-   - Last 12 turns were repetitive consensus statements
-   - Need clearer completion criteria or agent-driven finish detection
+1. **Post-Completion Validation Loop (Core Issue):**
+   - Last tool call at turn 35 (Jordan populated final metric)
+   - Turns 36-40: Pure verbal validation with no new work identified
+   - **Root Cause:** Agents lack mechanism to recognize "we're done" and call `orchestrator.finish`
+   - **Even reflection prompts at turn 36 didn't break the loop** - agents just continued validating
+   - **Solution:** Need explicit goal-tracking or completion criteria, not just bias toward action
 
-2. **Repetitive Late-Game Behavior:**
-   - Turns 29-40 largely repeated same themes
-   - Agents didn't recognize diminishing returns
-   - Possible solution: Reflection interval (set at 9, never reached) could prompt course correction
+2. **Vague Goals Enable Endless Discussion:**
+   - Scenario intentionally kept goals vague to observe emergent behavior
+   - Without explicit objectives to complete, agents oscillate between validating past work and asking "what's next?"
+   - Turns 31, 34, 38, 39, 40 all end with: "say it now and I'll create it" - but nothing is said
+   - **Solution:** Define explicit completion criteria OR teach agents to propose finish when idle
 
 3. **Lack of Dissent in Final Outcome:**
    - All agents aligned on Smartsheet value by turn 40
@@ -557,21 +562,36 @@ The "New Tool Adoption" scenario didn't have explicit success criteria like "Hel
    - Sam's validation (turn 11) after seeing evidence was turning point
    - Shows power of "show, don't tell" in tool adoption
 
+5. **Post-Completion Validation Loop (Key Discovery):**
+   - **Pattern:** Agents completed dashboard at turn 35 → turns 36-40 stuck in validation
+   - **Even reflection prompts didn't break loop:** Turn 36 reflection triggered but agents continued validating
+   - **"Say it now and I'll create it" pattern:** Turns 31, 34, 38, 39, 40 all end asking for new work, but nothing emerges
+   - **Root cause identified:** Vague goals + lack of explicit completion recognition = endless validation
+   - **This is a general multi-agent problem:** Without goal-tracking, agents get stuck in verbal validation after completing work
+
 ---
 
 ## 11. Recommendations for Future Runs
 
 ### 11.1 Orchestrator Improvements
 
-**1. Natural Completion Detection:**
-- Add pattern recognition for repetitive consensus statements
-- Allow agents to call `orchestrator.finish` with justification
-- Implement stale turn detection (already configured at 4, but not triggered)
+**1. Add Explicit Goal Tracking:**
+- **Current Issue:** Vague goals ("make Smartsheet valuable") → endless validation loops after work completes
+- **Recommendation:** Define explicit objectives at start: "Create 2 sheets with 5+ metrics each populated from Linear"
+- Agents can then recognize completion: "All 5 metrics populated. Calling orchestrator.finish."
+- **Alternative:** Add working procedure prompts: "Define next goal → Execute → Mark complete → Define next goal or finish"
 
-**2. Reflection Intervals:**
-- Current setting: reflection_interval=9 (never reached in 40-turn run)
-- Recommendation: Lower to 6-8 turns for longer scenarios
-- Reflection prompts could ask: "Have we achieved the goals? Should we wrap up?"
+**2. Teach Agents to Call Finish:**
+- **Current Issue:** Reflection at turn 36 didn't prompt finish despite no work identified
+- **Recommendation:** Modify reflection prompt: "List incomplete goals. If none, propose calling orchestrator.finish with summary."
+- Make `orchestrator.finish` more visible in agent prompts
+- Example: "When all deliverables complete and no new goals emerge after 2 turns, call orchestrator.finish"
+
+**3. Lower Stale Turn Limit (Secondary Fix):**
+- Current: stale_turn_limit=4 agents × 4 turns = 16 turns (would trigger at turn 51)
+- **Recommendation:** Set stale_turn_limit=2 (8 turns after last tool call)
+- Would have ended at turn 43 (turn 35 + 8), cutting 3 turns of repetition
+- Note: This is a safety net, not a solution to the root cause
 
 **3. Agent Turn Distribution:**
 - Consider weighted turn allocation based on role
@@ -733,11 +753,12 @@ This orchestrator run demonstrates several capabilities directly relevant to the
 - Turn 38 (Sam): "This is exactly what high-velocity, disciplined tool adoption looks like..."
 
 **Why This Happened:**
-- No natural completion signal
-- Agents interpreted continued turns as needing continued responses
-- Prompt didn't emphasize "it's okay to say 'we're done'"
+- **Vague goals** enabled endless "what's next?" loops after completing initial work
+- **Reflection prompts at turn 36 didn't help** - agents just validated more
+- **No explicit completion criteria** - agents never recognized they were done
+- **"Action over discussion" bias insufficient** - agents ask "say it now and I'll create it" but get no response
 
-**Lesson:** Long-running scenarios need explicit completion criteria or agents will generate low-value consensus statements indefinitely.
+**Lesson:** Vague goals (intentional to observe emergence) create validation loops. Next iteration: Add explicit goal-tracking procedure: "Define goal → Execute → Mark complete → Identify next goal OR call finish if idle for 2 turns."
 
 ---
 
@@ -831,20 +852,25 @@ This run successfully demonstrated a sophisticated 40-turn, 4-agent tool adoptio
 5. **Consensus:** Successfully demonstrated evidence-based tool adoption across 4 stakeholders
 
 **Areas for Improvement:**
-1. **Natural Completion:** Agents need better termination signals (hit max_turns limit)
-2. **Late-Game Repetition:** Last 12 turns were low-value consensus statements
-3. **Dissent Modeling:** Too much alignment; more realistic to have ongoing skepticism
-4. **Reflection Intervals:** Should trigger earlier (6-8 turns vs. 9) for course correction
+1. **Root Cause - Vague Goals:** Scenario intentionally vague to observe emergence, but this enabled validation loops after work completed (turns 36-40)
+2. **Core Fix Needed:** Add explicit goal-tracking or completion criteria so agents recognize "we're done" and call `orchestrator.finish`
+3. **Reflection Insufficient:** Prompts triggered at turns 27, 36 but didn't break validation loops - need stronger "propose finish" language
+4. **Dissent Modeling:** Too much alignment; more realistic to have ongoing skepticism
 
 **Bottom Line:**
 The orchestrator is production-ready for generating realistic multi-agent collaboration scenarios at scale. At $0.52 per 40-turn scenario, it enables data generation and evaluation workflows that would be economically infeasible with human participants. The system is particularly well-suited for Platform Suite initiative's goals of creating authentic, agent-driven task environments and studying cross-tool orchestration patterns.
 
 **Recommended Next Steps:**
-1. Lower reflection_interval to 6-8 for 30-40 turn scenarios
-2. Add explicit completion criteria or agent-driven finish detection
-3. Run variations where adoption is NOT justified (test range of outcomes)
-4. Integrate with Platform Suite data generation pipeline
-5. Experiment with smaller models for non-strategic turns (cost optimization)
+1. **Critical:** Add explicit goal-tracking mechanism to agent/world prompts:
+   - "Define next goal → Execute with tools → Mark complete → Identify next goal OR call orchestrator.finish if idle 2+ turns"
+   - Or provide explicit completion criteria at start: "Create 2 sheets with 5+ populated metrics from Linear"
+2. **Critical:** Strengthen reflection prompts to explicitly suggest finish:
+   - "List incomplete goals. If none exist and no new work identified, propose calling orchestrator.finish with run summary."
+3. **Secondary:** Lower stale_turn_limit to 2 (8 turns after last tool call) as safety net
+4. Run variations where adoption is NOT justified (test range of outcomes)
+5. Integrate with Platform Suite data generation pipeline
+
+**Expected Impact:** With explicit goal tracking, run would naturally end at turn 36-37 when agents recognize completion, reducing cost from $0.52 to ~$0.47 (10% savings) while dramatically improving conversation quality by eliminating 4-5 turns of repetitive validation.
 
 ---
 
